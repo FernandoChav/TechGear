@@ -19,8 +19,12 @@ public class ProductRepository(ApplicationDbContext context) : GenericRepository
     public async Task<Product?> GetByIdWithVariantsAsync(Guid id)
     {
         return await _dbSet
-            .Include(p => p.Variants) // <--- ¡La magia! Hace el JOIN SQL automático
+            .Include(p => p.Variants)
             .Include(p => p.Images)
+            // === AGREGAMOS ESTOS DOS PARA EVITAR EL ERROR DE MAPSTER ===
+            .Include(p => p.Brand)    
+            .Include(p => p.Category) 
+            // ==========================================================
             .FirstOrDefaultAsync(p => p.Id == id);
     }
     public async Task<Product?> GetByIdWithImagesAsync(Guid id)

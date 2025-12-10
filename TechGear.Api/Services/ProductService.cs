@@ -65,18 +65,39 @@ public class ProductService : IProductService
 
     // ... Implementa el resto (AddVariant, AddImage) siguiendo la misma lógica ...
     // Te dejo AddVariant como ejemplo extra:
-    public async Task<ProductVariant?> AddVariantAsync(Guid productId, CreateProductVariantDto dto)
+    public async Task<ProductVariant?> AddVariantAsync(Guid productId, CreateProductVariantDto request)
     {
-        var product = await _unitOfWork.Products.GetByIdAsync(productId);
-        if (product == null) return null;
+        // 1. Obtener el producto padre (Jefe)
+        var product = await _unitOfWork.Products.GetByIdWithVariantsAsync(productId);
+        
+        if (product == null) return null; // El padre no existe
 
-        var variant = dto.Adapt<ProductVariant>();
-        variant.ProductId = productId;
+        // 2. Validar que el SKU no exista ya (Regla de negocio crítica)
+        // Buscamos en las variantes que ya tiene este producto cargadas en memoria
+        if (product.Variants.Any(v => v.Sku == request.Sku))
+        {
+             throw new Exception($"El SKU '{request.Sku}' ya existe en este producto.");
+        }
 
-        if (product.Variants == null) product.Variants = new List<ProductVariant>();
+        // 3. Crear la Variante (Hijo)
+        var variant = new ProductVariant
+        {
+            ProductId = productId,
+            Sku = request.Sku,
+            Price = request.Price,
+            Stock = request.Stock,
+            
+            // Mapster o asignación directa del Diccionario de especificaciones
+            Specs = request.Specs ?? new Dictionary<string, string>(),
+            IsActive = true
+        };
+
+        // 4. Agregar al Padre y Guardar
+        // Al agregarlo a la lista del padre, EF Core entiende que debe guardarlo en la tabla ProductVariants
         product.Variants.Add(variant);
-
+        
         await _unitOfWork.SaveChangesAsync();
+
         return variant;
     }
 

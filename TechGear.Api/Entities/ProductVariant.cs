@@ -19,4 +19,5 @@ public class ProductVariant : BaseAuditableEntity
 
     // PostgreSQL JSONB: Guardamos atributos dinámicos aquí
     public Dictionary<string, string> Specs { get; set; } = new();
+    public bool IsActive { get; set; } = false;
 }
