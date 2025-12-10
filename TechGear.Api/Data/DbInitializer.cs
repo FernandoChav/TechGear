@@ -1,19 +1,26 @@
+using Microsoft.AspNetCore.Identity;
 using TechGear.Api.Entities;
 
 namespace TechGear.Api.Data;
 
 public static class DbInitializer
 {
-    public static async Task SeedAsync(ApplicationDbContext context)
+    // AHORA RECIBIMOS TAMBIÉN EL ROLEMANAGER
+    public static async Task SeedAsync(ApplicationDbContext context, RoleManager<IdentityRole> roleManager)
     {
-        // 1. Asegurarse de que la BD existe (opcional si usas migraciones, pero útil)
-        // await context.Database.EnsureCreatedAsync(); 
-
-        // 2. Verificar si ya existen Marcas. Si hay, no hacemos nada.
-        if (context.Brands.Any())
+        // 1. Crear Roles si no existen (ESTO ES LO NUEVO)
+        if (!await roleManager.RoleExistsAsync("Admin"))
         {
-            return; // La DB ya fue sembrada
+            await roleManager.CreateAsync(new IdentityRole("Admin"));
         }
+
+        if (!await roleManager.RoleExistsAsync("Customer"))
+        {
+            await roleManager.CreateAsync(new IdentityRole("Customer"));
+        }
+
+        // 2. Verificar si ya existen Marcas (Lo que ya tenías)
+        if (context.Brands.Any()) return;
 
         // 3. Crear Marcas
         var brands = new List<Brand>
@@ -24,18 +31,15 @@ public static class DbInitializer
             new() { Name = "Corsair", Slug = "corsair" }
         };
         await context.Brands.AddRangeAsync(brands);
-        await context.SaveChangesAsync(); // Guardamos para obtener los IDs
+        await context.SaveChangesAsync();
 
-        // 4. Crear Categorías y Subcategorías
-        // Recuperamos las entidades adjuntas para que EF no intente crearlas de nuevo
-        
+        // 4. Crear Categorías
         var perifericos = new Category { Name = "Periféricos", Slug = "perifericos" };
         var componentes = new Category { Name = "Componentes", Slug = "componentes" };
 
         await context.Categories.AddRangeAsync(perifericos, componentes);
         await context.SaveChangesAsync();
 
-        // Subcategorías (usamos el objeto padre 'perifericos')
         var teclados = new Category { Name = "Teclados", Slug = "teclados", ParentId = perifericos.Id };
         var mouses = new Category { Name = "Mouses", Slug = "mouses", ParentId = perifericos.Id };
         var audifonos = new Category { Name = "Audífonos", Slug = "audifonos", ParentId = perifericos.Id };
@@ -48,7 +52,6 @@ public static class DbInitializer
 
         await context.Categories.AddRangeAsync(mecanicos, membrana);
         
-        // 5. Guardar todo el grafo final
         await context.SaveChangesAsync();
     }
 }
