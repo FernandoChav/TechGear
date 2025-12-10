@@ -28,7 +28,8 @@ public record ProductDto(
 
     // Colecciones (Opcional, a veces en listas grandes no queremos variantes)
     // IEnumerable<ProductVariantDto> Variants 
-    bool IsActive
+    bool IsActive,
+    IEnumerable<ProductImageDto> Images
 );
 // Lo que recibimos para crear una variante (El inventario físico)
 public record CreateProductVariantDto(

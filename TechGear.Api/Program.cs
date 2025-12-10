@@ -82,7 +82,8 @@ TypeAdapterConfig<Product, ProductDto>
     .Map(dest => dest.CategoryName, src => src.Category.Name)
     .Map(dest => dest.CategorySlug, src => src.Category.Slug)
     .Map(dest => dest.Price, src => src.Variants.Any() ? src.Variants.Min(v => v.Price) : 0) // Precio "desde"
-    .Map(dest => dest.PictureUrl, src => src.Images.Any() ? src.Images.First().ImageUrl : ""); // Primera foto
+    .Map(dest => dest.PictureUrl, src => src.Images.Any() ? src.Images.First().ImageUrl : "") // Primera foto
+    .Map(dest => dest.Images, src => src.Images);
 var app = builder.Build();
 app.UseMiddleware<TechGear.Api.Middleware.ExceptionMiddleware>();
 app.UseHttpsRedirection();

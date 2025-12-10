@@ -17,49 +17,64 @@ public class ProductService : IProductService
         _imageService = imageService;
     }
 
-    public async Task<Product?> CreateProductWithImagesAsync(CreateProductDto dto, List<IFormFile> images)
+    public async Task<Product?> CreateProductWithImagesAsync(CreateProductDto request, List<IFormFile> images)
     {
-        // 1. Validar Slug
-        var existing = await _unitOfWork.Products.GetBySlugAsync(dto.Slug);
-        if (existing != null) return null; // O lanzar excepción personalizada
+        // 1. Reutilizamos el método de crear producto (ya valida marca, categoría y slug)
+        // Esto crea el producto en BD y nos devuelve el ID
+        var product = await CreateProductAsync(request);
+        
+        if (product == null) return null; // Si falló la creación (ej: slug repetido)
 
-        // 2. Mapear
-        var product = dto.Adapt<Product>();
-
-        // 3. Subir Imágenes
-        if (images != null && images.Any())
+        // 2. Subir las imágenes una por una
+        foreach (var file in images)
         {
-            product.Images = new List<ProductImage>();
-            foreach (var file in images)
+            // Reutilizamos el método de subir imagen que acabamos de hacer
+            // Nota: Si una falla, el producto queda creado pero sin esa foto. 
+            // En un sistema real usaríamos transacciones complejas, pero para MVP está bien.
+            if (file.Length > 0)
             {
-                var url = await _imageService.UploadImageAsync(file);
-                if (!string.IsNullOrEmpty(url))
-                {
-                    product.Images.Add(new ProductImage { ImageUrl = url });
-                }
+                await AddImageAsync(product.Id, file);
             }
         }
 
-        // 4. Guardar
-        await _unitOfWork.Products.AddAsync(product);
-        await _unitOfWork.SaveChangesAsync();
-
+        // Devolvemos el producto con todo actualizado
         return product;
     }
 
-    public async Task<Product?> UpdateProductAsync(Guid id, PatchProductDto dto)
+    public async Task<Product?> UpdateProductAsync(Guid id, PatchProductDto request)
     {
+        // 1. Buscar el producto
         var product = await _unitOfWork.Products.GetByIdAsync(id);
         if (product == null) return null;
 
-        // Lógica de parcheo
-        if (dto.Name != null) product.Name = dto.Name;
-        if (dto.Description != null) product.Description = dto.Description;
-        if (dto.IsActive.HasValue) product.IsActive = dto.IsActive.Value;
-        if (dto.BrandId.HasValue) product.BrandId = dto.BrandId.Value;
-        if (dto.CategoryId.HasValue) product.CategoryId = dto.CategoryId.Value;
+        // 2. Actualizar solo si el valor no es nulo (Lógica PATCH)
+        
+        if (!string.IsNullOrEmpty(request.Name)) 
+            product.Name = request.Name;
 
+        if (!string.IsNullOrEmpty(request.Description)) 
+            product.Description = request.Description;
+            
+        if (request.IsActive.HasValue) 
+            product.IsActive = request.IsActive.Value;
+
+        // 3. Validar cambios de relaciones (Si nos mandan IDs nuevos)
+        if (request.BrandId.HasValue)
+        {
+            var brand = await _unitOfWork.Brands.GetByIdAsync(request.BrandId.Value);
+            if (brand != null) product.BrandId = request.BrandId.Value;
+        }
+
+        if (request.CategoryId.HasValue)
+        {
+            var category = await _unitOfWork.Categories.GetByIdAsync(request.CategoryId.Value);
+            if (category != null) product.CategoryId = request.CategoryId.Value;
+        }
+
+        // 4. Guardar
+        // Entity Framework detecta qué propiedades cambiaron y genera el SQL UPDATE solo para ellas
         await _unitOfWork.SaveChangesAsync();
+
         return product;
     }
 
@@ -69,14 +84,14 @@ public class ProductService : IProductService
     {
         // 1. Obtener el producto padre (Jefe)
         var product = await _unitOfWork.Products.GetByIdWithVariantsAsync(productId);
-        
+
         if (product == null) return null; // El padre no existe
 
         // 2. Validar que el SKU no exista ya (Regla de negocio crítica)
         // Buscamos en las variantes que ya tiene este producto cargadas en memoria
         if (product.Variants.Any(v => v.Sku == request.Sku))
         {
-             throw new Exception($"El SKU '{request.Sku}' ya existe en este producto.");
+            throw new Exception($"El SKU '{request.Sku}' ya existe en este producto.");
         }
 
         // 3. Crear la Variante (Hijo)
@@ -86,7 +101,7 @@ public class ProductService : IProductService
             Sku = request.Sku,
             Price = request.Price,
             Stock = request.Stock,
-            
+
             // Mapster o asignación directa del Diccionario de especificaciones
             Specs = request.Specs ?? new Dictionary<string, string>(),
             IsActive = true
@@ -95,7 +110,7 @@ public class ProductService : IProductService
         // 4. Agregar al Padre y Guardar
         // Al agregarlo a la lista del padre, EF Core entiende que debe guardarlo en la tabla ProductVariants
         product.Variants.Add(variant);
-        
+
         await _unitOfWork.SaveChangesAsync();
 
         return variant;
@@ -152,30 +167,49 @@ public class ProductService : IProductService
 
     public async Task<string?> AddImageAsync(Guid productId, IFormFile file)
     {
-        var product = await _unitOfWork.Products.GetByIdAsync(productId);
+        // 1. Validar producto
+        var product = await _unitOfWork.Products.GetByIdWithImagesAsync(productId);
         if (product == null) return null;
-        var url = await _imageService.UploadImageAsync(file);
-        if (string.IsNullOrEmpty(url)) return null;
-        if (product.Images == null) product.Images = new List<ProductImage>();
-        var image = new ProductImage { ImageUrl = url };
+
+        // 2. Subir usando TU método (UploadImageAsync)
+        var imageUrl = await _imageService.UploadImageAsync(file);
+
+        if (string.IsNullOrEmpty(imageUrl))
+            throw new Exception("No se pudo subir la imagen a Cloudinary");
+
+        // 3. Guardar en Base de Datos
+        var image = new ProductImage
+        {
+            ImageUrl = imageUrl,
+            ProductId = productId
+        };
+
         product.Images.Add(image);
         await _unitOfWork.SaveChangesAsync();
-        return url;
+
+        return image.ImageUrl;
     }
 
     public async Task<bool> RemoveImageAsync(Guid productId, Guid imageId)
     {
-        var product = await _unitOfWork.Products.GetByIdAsync(productId);
+        var product = await _unitOfWork.Products.GetByIdWithImagesAsync(productId);
         if (product == null) return false;
 
-        var images = product.Images;
-        if (images == null) return false;
+        // Buscamos la imagen en la lista en memoria
+        var image = product.Images.FirstOrDefault(x => x.Id == imageId);
 
-        var image = images.FirstOrDefault(img => img.Id == imageId);
         if (image == null) return false;
 
-        images.Remove(image);
+        // 1. Borrar de Cloudinary usando TU método
+        var cloudSuccess = await _imageService.DeleteImageAsync(image.ImageUrl);
+
+        // Opcional: Si falla en la nube, ¿borramos de la BD igual? 
+        // Generalmente sí, para no dejar "basura" en la BD, aunque quede huérfana en la nube.
+
+        // 2. Borrar de la BD
+        product.Images.Remove(image);
         await _unitOfWork.SaveChangesAsync();
+
         return true;
     }
 }
