@@ -80,13 +80,52 @@ public class ProductService : IProductService
         return variant;
     }
 
-    public async Task<Product?> CreateProductAsync(CreateProductDto dto)
+    public async Task<Product?> CreateProductAsync(CreateProductDto request)
     {
-        var existing = await _unitOfWork.Products.GetBySlugAsync(dto.Slug);
-        if (existing != null) return null; // O lanzar excepción personalizada
-        var product = dto.Adapt<Product>();
+        // 1. Validar que el Slug sea único
+        var existingProduct = (await _unitOfWork.Products.GetAllAsync())
+                              .FirstOrDefault(p => p.Slug == request.Slug);
+        if (existingProduct != null) return null;
+
+        // 2. BUSCAR LA MARCA POR NOMBRE (Aquí arreglamos el error del Cast)
+        // Traemos todas las marcas y buscamos la que coincida con el texto que enviaste
+        var allBrands = await _unitOfWork.Brands.GetAllAsync();
+        var brand = allBrands.FirstOrDefault(b => b.Name.ToLower() == request.Brand.ToLower());
+
+        if (brand == null)
+        {
+            // Opcional: Podríamos lanzar una excepción o crear la marca al vuelo.
+            // Por ahora, retornamos null para indicar error.
+            throw new Exception($"La marca '{request.Brand}' no existe en la base de datos.");
+        }
+
+        // 3. BUSCAR LA CATEGORÍA POR NOMBRE
+        var allCategories = await _unitOfWork.Categories.GetAllAsync();
+        var category = allCategories.FirstOrDefault(c => c.Name.ToLower() == request.Category.ToLower());
+
+        if (category == null)
+        {
+            throw new Exception($"La categoría '{request.Category}' no existe en la base de datos.");
+        }
+
+        // 4. CREAR LA ENTIDAD MANUALMENTE (Más seguro que Mapster en este caso)
+        // Así evitamos que intente meter el string en el objeto
+        var product = new Product
+        {
+            Name = request.Name,
+            Slug = request.Slug,
+            Description = request.Description,
+            IsActive = true,
+
+            // Aquí asignamos los IDs que encontramos arriba
+            BrandId = brand.Id,
+            CategoryId = category.Id
+        };
+
+        // 5. Guardar en Base de Datos
         await _unitOfWork.Products.AddAsync(product);
         await _unitOfWork.SaveChangesAsync();
+
         return product;
     }
 

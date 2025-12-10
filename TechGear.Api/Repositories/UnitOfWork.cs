@@ -8,27 +8,30 @@ public class UnitOfWork : IUnitOfWork
 {
     private readonly ApplicationDbContext _context;
 
+    // Backing fields para Lazy Loading (Mantenemos tu lógica)
     private IProductRepository? _products;
-    private IGenericRepository<Brand>? _brands; // <--- Nuevo
-    private ICategoryRepository? _categories;   // <--- Nuevo
+    private IGenericRepository<Brand>? _brands; 
+    private ICategoryRepository? _categories; 
 
     public UnitOfWork(ApplicationDbContext context)
     {
         _context = context;
     }
 
-    public IProductRepository Products =>
+    // 1. Productos
+    public IProductRepository Products => 
         _products ??= new ProductRepository(_context);
 
-    // Repositorio Genérico "al vuelo" para Marcas
-    public IGenericRepository<Brand> Brands =>
+    // 2. Marcas (Aquí estaba el conflicto, ahora usa la implementación lazy)
+    public IGenericRepository<Brand> Brands => 
         _brands ??= new GenericRepository<Brand>(_context);
 
-    // Repositorio Especializado para Categorías
-    public ICategoryRepository Categories =>
+    // 3. Categorías
+    public ICategoryRepository Categories => 
         _categories ??= new CategoryRepository(_context);
 
-    IGenericRepository<Brand> IUnitOfWork.Brands => throw new NotImplementedException();
+    // === ELIMINAMOS LA LÍNEA QUE DABA EL ERROR ===
+    // IGenericRepository<Brand> IUnitOfWork.Brands => throw new NotImplementedException(); <-- ESTA LINEA SE VA
 
     public async Task<int> SaveChangesAsync()
     {
@@ -38,5 +41,6 @@ public class UnitOfWork : IUnitOfWork
     public void Dispose()
     {
         _context.Dispose();
+        GC.SuppressFinalize(this); // Buena práctica agregar esto
     }
 }

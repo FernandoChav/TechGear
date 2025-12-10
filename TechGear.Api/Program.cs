@@ -101,9 +101,10 @@ using (var scope = app.Services.CreateScope())
 
         // AGREGAR ESTA LÍNEA:
         var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
+        var userManager = services.GetRequiredService<UserManager<User>>();
 
         // PASAR LOS DOS PARÁMETROS:
-        await DbInitializer.SeedAsync(context, roleManager);
+        await DbInitializer.SeedAsync(context, roleManager, userManager);
     }
     catch (Exception ex)
     {

@@ -3,7 +3,7 @@ using Mapster;
 using Microsoft.AspNetCore.Mvc;
 using TechGear.Api.DTOs;
 using TechGear.Api.Interfaces;
-
+using Microsoft.AspNetCore.Authorization;
 namespace TechGear.Api.Controllers;
 
 public class ProductsController(IUnitOfWork unitOfWork, IProductService productService) : BaseApiController
@@ -44,7 +44,7 @@ public class ProductsController(IUnitOfWork unitOfWork, IProductService productS
     // ==========================================
     // ESCRITURA (Commands) -> A través del Service (Seguro)
     // ==========================================
-
+    [Authorize(Roles = "Admin")]
     [HttpPost]
     public async Task<ActionResult<ApiResponse<ProductDto>>> Create(CreateProductDto request)
     {
@@ -56,7 +56,7 @@ public class ProductsController(IUnitOfWork unitOfWork, IProductService productS
 
         return CreatedResponse(nameof(GetOne), new { id = product.Id }, product.Adapt<ProductDto>(), "Producto creado exitosamente");
     }
-
+    [Authorize(Roles = "Admin")]
     [HttpPost("with-images")]
     public async Task<ActionResult<ApiResponse<ProductDto>>> CreateWithImages(
         [FromForm] CreateProductDto request,
@@ -70,7 +70,7 @@ public class ProductsController(IUnitOfWork unitOfWork, IProductService productS
 
         return CreatedResponse(nameof(GetOne), new { id = product.Id }, product.Adapt<ProductDto>(), "Producto con imágenes creado exitosamente");
     }
-
+    [Authorize(Roles = "Admin")]
     [HttpPatch("{id}")]
     public async Task<ActionResult<ApiResponse<ProductDto>>> PatchUpdate(Guid id, PatchProductDto request)
     {
@@ -81,7 +81,7 @@ public class ProductsController(IUnitOfWork unitOfWork, IProductService productS
 
         return OkResponse(product.Adapt<ProductDto>(), "Producto actualizado correctamente");
     }
-
+    [Authorize(Roles = "Admin")]
     [HttpPost("{id}/variants")]
     public async Task<ActionResult<ApiResponse<ProductVariantDto>>> AddVariant(Guid id, CreateProductVariantDto request)
     {
@@ -92,7 +92,7 @@ public class ProductsController(IUnitOfWork unitOfWork, IProductService productS
 
         return OkResponse(variant.Adapt<ProductVariantDto>(), "Variante agregada al inventario");
     }
-
+    [Authorize(Roles = "Admin")]
     [HttpPost("{id}/images")]
     public async Task<ActionResult<ApiResponse<object>>> UploadImage(Guid id, IFormFile file)
     {
@@ -104,7 +104,7 @@ public class ProductsController(IUnitOfWork unitOfWork, IProductService productS
 
         return OkResponse<object>(new { url = imageUrl }, "Imagen subida exitosamente");
     }
-
+    [Authorize(Roles = "Admin")]
     [HttpDelete("{id}/images/{imageId}")]
     public async Task<ActionResult<ApiResponse<object>>> DeleteImage(Guid id, Guid imageId)
     {
