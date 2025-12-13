@@ -8,7 +8,7 @@ using TechGear.Api.DTOs;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using System.Text;
-
+using StackExchange.Redis;  
 var builder = WebApplication.CreateBuilder(args);
 
 // 1. Configurar la conexión a Base de Datos (PostgreSQL)
@@ -23,6 +23,11 @@ builder.Services.AddScoped<IUnitOfWork, TechGear.Api.Repositories.UnitOfWork>();
 builder.Services.AddScoped<IImageService, TechGear.Api.Services.CloudinaryService>();
 builder.Services.AddScoped<IProductService, TechGear.Api.Services.ProductService>();
 builder.Services.AddScoped<ITokenService, TechGear.Api.Services.TokenService>();
+builder.Services.AddSingleton<IConnectionMultiplexer>(c => 
+{
+    var options = ConfigurationOptions.Parse(builder.Configuration.GetConnectionString("Redis")!);
+    return ConnectionMultiplexer.Connect(options);
+});
 builder.Services.AddIdentity<User, IdentityRole>(options =>
 {
     // Configuración laxa para desarrollo (en prod usaríamos reglas estrictas)
@@ -71,10 +76,20 @@ builder.Services.AddAuthentication(options =>
     };
 });
 // Agregar Controladores y Swagger (Documentación)
-
+builder.Services.AddScoped<IBasketRepository, TechGear.Api.Repositories.BasketRepository>();
 TypeAdapterConfig.GlobalSettings.Default.PreserveReference(true);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy.WithOrigins("http://localhost:3000") // La URL de tu Next.js
+              .AllowAnyMethod()                     // GET, POST, PUT, DELETE...
+              .AllowAnyHeader()                     // Authorization, Content-Type...
+              .AllowCredentials();                  // ¡CRÍTICO! Permite pasar las Cookies HttpOnly
+    });
+});
 TypeAdapterConfig<Product, ProductDto>
     .NewConfig()
     .Map(dest => dest.BrandName, src => src.Brand.Name)
@@ -87,7 +102,7 @@ TypeAdapterConfig<Product, ProductDto>
 var app = builder.Build();
 app.UseMiddleware<TechGear.Api.Middleware.ExceptionMiddleware>();
 app.UseHttpsRedirection();
-
+app.UseCors("AllowFrontend");
 // Importante: Authentication va antes de Authorization
 app.UseAuthentication();
 app.UseAuthorization();

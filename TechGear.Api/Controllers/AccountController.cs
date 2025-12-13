@@ -39,46 +39,61 @@ public class AccountController(UserManager<User> userManager, ITokenService toke
     }
 
     [HttpPost("login")]
-    public async Task<ActionResult> Login(LoginDto loginDto) // Nota: Ya no devuelve <UserDto>
+    public async Task<ActionResult<ApiResponse<UserDto>>> Login(LoginDto loginDto)
     {
-        // 1. Buscar usuario
+        // 1. Validaciones (Igual que tenías)
         var user = await _userManager.FindByEmailAsync(loginDto.Email);
-        if (user == null) return Unauthorized("Email o contraseña inválidos");
+        if (user == null) return Unauthorized(new ApiResponse<string> { Success = false, Message = "Email o contraseña inválidos" });
 
-        // 2. Verificar contraseña
         var result = await _userManager.CheckPasswordAsync(user, loginDto.Password);
-        if (!result) return Unauthorized("Email o contraseña inválidos");
+        if (!result) return Unauthorized(new ApiResponse<string> { Success = false, Message = "Email o contraseña inválidos" });
 
-        // 3. Generar Token
+        // 2. Generar Token y Cookie (Igual que tenías)
         var token = await _tokenService.CreateToken(user);
 
-        // 4. Configurar la Cookie HttpOnly
         var cookieOptions = new CookieOptions
         {
             HttpOnly = true,
-            Secure = true,  
+            Secure = true,
             SameSite = SameSiteMode.Strict,
             Expires = DateTime.UtcNow.AddDays(7)
         };
 
         Response.Cookies.Append("accessToken", token, cookieOptions);
 
-        // 5. Respuesta Limpia (Como pediste)
-        return Ok(new { message = "Login exitoso. Bienvenido a TechGear." });
+        // 3. PREPARAR LOS DATOS DEL USUARIO (Esto es lo nuevo)
+        // Obtenemos los roles para enviarlos al frontend
+        var roles = await _userManager.GetRolesAsync(user);
+
+        var userDto = new UserDto
+        {
+            Email = user.Email!,
+            FullName = user.FullName,
+            Roles = [.. roles] // Sintaxis de colección de C# 12
+        };
+
+        // 4. RETORNAR API RESPONSE CON DATOS
+        // El frontend recibe "Success: true" y los datos del usuario para actualizar el estado global
+        return Ok(new ApiResponse<UserDto>
+        {
+            Success = true,
+            Message = "Login exitoso. Bienvenido a TechGear.",
+            Data = userDto
+        });
     }
-    
+
     // Endpoint útil para que el Frontend sepa si la cookie sigue viva
     [HttpGet("me")]
     public async Task<ActionResult<UserDto>> GetCurrentUser()
     {
         // User.Identity.Name viene del Claim del token que leímos de la cookie automáticamente
         var email = User.Identity?.Name;
-        
+
         if (string.IsNullOrEmpty(email)) return Unauthorized();
 
         var user = await _userManager.FindByEmailAsync(email);
         if (user == null) return Unauthorized();
-        
+
         var roles = await _userManager.GetRolesAsync(user);
 
         return new UserDto
@@ -87,5 +102,28 @@ public class AccountController(UserManager<User> userManager, ITokenService toke
             FullName = user.FullName,
             Roles = [.. roles]
         };
+    }
+    [HttpPost("logout")]
+    public ActionResult<ApiResponse<string>> Logout()
+    {
+        // 1. Crear las opciones de la cookie (Deben coincidir con las del Login)
+        var cookieOptions = new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true,
+            SameSite = SameSiteMode.Strict,
+            // 2. La clave: poner la fecha de expiración en el pasado
+            Expires = DateTime.UtcNow.AddDays(-1)
+        };
+
+        // 3. Sobrescribir la cookie "accessToken" con un valor vacío
+        Response.Cookies.Append("accessToken", "", cookieOptions);
+
+        // 4. Retornar respuesta exitosa
+        return Ok(new ApiResponse<string>
+        {
+            Success = true,
+            Message = "Has cerrado sesión correctamente."
+        });
     }
 }
