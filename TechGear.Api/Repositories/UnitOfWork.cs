@@ -12,7 +12,7 @@ public class UnitOfWork : IUnitOfWork
     private IProductRepository? _products;
     private IGenericRepository<Brand>? _brands; 
     private ICategoryRepository? _categories; 
-
+    private IOrderRepository? _orders;
     public UnitOfWork(ApplicationDbContext context)
     {
         _context = context;
@@ -32,7 +32,9 @@ public class UnitOfWork : IUnitOfWork
 
     // === ELIMINAMOS LA LÍNEA QUE DABA EL ERROR ===
     // IGenericRepository<Brand> IUnitOfWork.Brands => throw new NotImplementedException(); <-- ESTA LINEA SE VA
-
+    public IOrderRepository Orders => 
+        _orders ??= new OrderRepository(_context);
+    
     public async Task<int> SaveChangesAsync()
     {
         return await _context.SaveChangesAsync();

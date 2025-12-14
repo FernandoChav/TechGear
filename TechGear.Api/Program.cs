@@ -23,6 +23,7 @@ builder.Services.AddScoped<IUnitOfWork, TechGear.Api.Repositories.UnitOfWork>();
 builder.Services.AddScoped<IImageService, TechGear.Api.Services.CloudinaryService>();
 builder.Services.AddScoped<IProductService, TechGear.Api.Services.ProductService>();
 builder.Services.AddScoped<ITokenService, TechGear.Api.Services.TokenService>();
+builder.Services.AddScoped<IOrderService, TechGear.Api.Services.OrderService>();
 builder.Services.AddSingleton<IConnectionMultiplexer>(c => 
 {
     var options = ConfigurationOptions.Parse(builder.Configuration.GetConnectionString("Redis")!);

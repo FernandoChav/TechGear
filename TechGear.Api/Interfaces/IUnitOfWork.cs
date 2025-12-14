@@ -7,4 +7,5 @@ public interface IUnitOfWork : IDisposable
     Task<int> SaveChangesAsync();
     IGenericRepository<Brand> Brands { get; } // Para marcas usamos el genérico, es suficiente
     ICategoryRepository Categories { get; }
+    IOrderRepository Orders { get; }
 }
