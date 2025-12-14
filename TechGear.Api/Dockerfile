@@ -1,26 +1,23 @@
-# ETAPA 1: BUILD (Compilación)
-# Usamos la imagen SDK de .NET 10.0
+# ETAPA 1: BUILD
+# Usamos la imagen del SDK de .NET 10 (La más nueva en 2025)
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-# Copiamos el archivo de proyecto y restauramos dependencias
-# Esto optimiza la caché de Docker
+# Copiamos el csproj y restauramos
 COPY ["TechGear.Api.csproj", "./"]
 RUN dotnet restore "TechGear.Api.csproj"
 
-# Copiamos el resto del código fuente
+# Copiamos todo lo demas
 COPY . .
 WORKDIR "/src/."
-
-# Compilamos en modo Release
 RUN dotnet build "TechGear.Api.csproj" -c Release -o /app/build
 
-# Publicamos los archivos finales
+# Publicamos
 FROM build AS publish
 RUN dotnet publish "TechGear.Api.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
-# ETAPA 2: RUNTIME (Ejecución Ligera)
-# Usamos la imagen Runtime de ASP.NET Core 10.0 (más liviana)
+# ETAPA 2: RUNTIME
+# Usamos el Runtime de .NET 10
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 EXPOSE 8080
